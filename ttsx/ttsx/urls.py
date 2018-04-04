@@ -15,6 +15,7 @@ Including another URLconf
 """
 from django.conf.urls import include, url
 from django.contrib import admin
+import haystack.urls
 
 urlpatterns = [
     url(r'^admin/', include(admin.site.urls)),
@@ -23,4 +24,5 @@ urlpatterns = [
     url(r'^cart/',include('tt_cart.urls')),
     url(r'^order/',include('tt_order.urls')),
     url(r'^tinymce/',include('tinymce.urls')),
+    # url(r'^search/', include('haystack.urls')),
 ]

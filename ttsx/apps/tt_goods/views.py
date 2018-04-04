@@ -4,6 +4,9 @@ from django.core.cache import cache
 from .models import GoodsSKU
 from django.http import Http404
 from django_redis import get_redis_connection
+from django.core.paginator import Paginator,Page
+from haystack.generic_views import SearchView
+from utils.page_list import get_page_list
 
 
 # Create your views here.
@@ -97,3 +100,81 @@ def detail(request, sku_id):
     }
 
     return render(request, 'detail.html', context)
+
+
+def list_sku(request,category_id):
+    #查询当前分类对象
+    try:
+        category_now=GoodsCategory.objects.get(pk=category_id)
+    except:
+        raise Http404()
+
+    # 接收排序规则
+    order = int(request.GET.get('order', 1))
+    if order == 2:
+        order_by = '-price'  # 按照价格降序
+    elif order == 3:
+        order_by = 'price'  # 按照价格升序
+    elif order == 4:
+        order_by = '-sales'  # 按照销量降序
+    else:
+        order_by = '-id'  # 按照编号降序排列
+
+    #查询当前分类的所有商品
+    sku_list=GoodsSKU.objects.filter(category_id=category_id).order_by(order_by)
+
+    #查询所有分类信息
+    category_list=GoodsCategory.objects.all()
+
+    #当前分类的最新的两个商品
+    new_list=category_now.goodssku_set.all().order_by('-id')[0:2]
+
+    #分页
+    paginator=Paginator(sku_list,1)
+    # 总页数
+    total_page = paginator.num_pages
+    # 接收页码值，进行判断
+    pindex = int(request.GET.get('pindex', 1))
+    if pindex < 1:
+        pindex = 1
+    if pindex > total_page:
+        pindex = total_page
+    # 查询指定页码的数据
+    page=paginator.page(pindex)
+
+    # 构造页码的列表，用于提示页码链接
+    page_list = []  # 3 4 5 6 7==>range(n-2,n+3)
+    if total_page <= 5:  # 如果不足5页，则显示所有数字
+        page_list = range(1, total_page + 1)
+    elif pindex <= 2:  # 如果是前两页，则显示1-5
+        page_list = range(1, 6)
+    elif pindex >= total_page - 1:  # 如果是最后两页，则显示最后5页
+        page_list = range(total_page - 4, total_page + 1)  # 共18页，则最后的数字是14 15 16 17 18
+    else:
+        page_list = range(pindex - 2, pindex + 3)
+    # page_list = get_page_list(total_page, pindex)
+    context={
+        'title':'商品列表',
+        'page':page,
+        'category_list':category_list,
+        'category_now':category_now,
+        'new_list':new_list,
+        'order':order,
+        'page_list':page_list,
+
+    }
+    return render(request,'list.html',context)
+
+
+class MySearchView(SearchView):
+    def get_context_data(self, *args, **kwargs):
+        context = super().get_context_data(*args, **kwargs)
+        context['title']='搜索结果'
+        context['category_list']=GoodsCategory.objects.all()
+
+        #页码控制
+        total_page=context['paginator'].num_pages
+        pindex=context['page_obj'].number
+        context['page_list']=get_page_list(total_page,pindex)
+
+        return context
